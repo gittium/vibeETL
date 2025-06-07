@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hospital Data Selection</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--blue:#005EB8;--blue2:#0072CE;--light:#E6F3FF;--border:#E2E8F0;--txt:#2C3E50}
+*{box-sizing:border-box}
+body{font-family:'Inter',sans-serif;margin:0;padding:2rem;background:#F8FAFC;color:var(--txt)}
+.container{max-width:1200px;margin:0 auto;background:#fff;padding:2rem;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,.05)}
+h1{margin:0 0 2rem;color:var(--blue);border-bottom:2px solid var(--border);padding-bottom:1rem}
+.table-block{margin-bottom:1.5rem;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.table-header{background:var(--light);padding:1rem;display:flex;gap:1rem;cursor:pointer}
+.table-header:hover{background:#D9EBFF}
+.fields{display:none;padding:1.5rem;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;background:#fff}
+.select-all-container{padding:.5rem 1.5rem;background:var(--light);border-bottom:1px solid var(--border)}
+input[type=checkbox]{accent-color:var(--blue2)}
+button{background:var(--blue);color:#fff;border:none;padding:.75rem 1.5rem;border-radius:6px;cursor:pointer;font-weight:500;margin-top:0.5rem}
+button:hover{background:#003D7A}
+#submitButton{margin-top:2rem;width:100%;max-width:200px}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Hospital Data Selection</h1>
+  <form id="selectionForm">
+    <div id="tablesContainer"></div>
+    <button id="submitButton" type="submit">Save Configuration</button>
+  </form>
+  <div id="resultsContainer"></div>
+</div>
+
+<script>
+const API = "http://localhost:8000";
+
+/* Build picker */
+fetch(API+"/schema").then(r=>r.json()).then(schema=>{
+  const wrap=document.getElementById("tablesContainer");
+  Object.keys(schema).forEach(tbl=>{
+    const blk=document.createElement("div");blk.className="table-block";
+    const hdr=document.createElement("div");hdr.className="table-header";
+    hdr.innerHTML=`📊 <strong>${tbl}</strong>`;blk.appendChild(hdr);
+
+    const bar=document.createElement("div");bar.className="select-all-container";
+    const all=Object.assign(document.createElement("input"),{type:"checkbox"});
+    bar.append(all,Object.assign(document.createElement("label"),{textContent:" Select All Fields"}));
+    blk.appendChild(bar);
+
+    const fields=document.createElement("div");fields.className="fields";
+    schema[tbl].forEach(col=>{
+      const item=document.createElement("div");item.style.display="flex";item.style.gap=".5rem";
+      const cb=Object.assign(document.createElement("input"),{type:"checkbox",name:`${tbl}[]`,value:col,id:`${tbl}_${col}`});
+      const lab=Object.assign(document.createElement("label"),{textContent:col});
+      lab.setAttribute("for",cb.id);item.append(cb,lab);fields.appendChild(item);
+    });
+    blk.appendChild(fields);wrap.appendChild(blk);
+    hdr.onclick=()=>fields.style.display=fields.style.display==="grid"?"none":"grid";
+    all.onchange=()=>fields.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.checked=all.checked);
+  });
+});
+
+/* Save configuration */
+document.getElementById("selectionForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const selections={}, tableSet=new Set();
+  document.querySelectorAll("input[type=checkbox]:checked").forEach(cb=>{
+    if(!cb.name.includes("[]"))return;
+    const tbl=cb.name.split("[]")[0];
+    (selections[tbl] ||= []).push(cb.value);
+    tableSet.add(tbl);
+  });
+  if(!Object.keys(selections).length){alert("Pick at least one field.");return;}
+
+  const r=await fetch(API+"/configure",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({selections})});
+  if(!r.ok){alert(await r.text());return;}
+  const {config_id,load_order}=await r.json();
+  showConfig(config_id,load_order);
+});
+
+function showConfig(id, order){
+  const box=document.getElementById("resultsContainer");
+  box.innerHTML=`✅ Config <b>${id}</b> saved.<br>Load order ⇒ ${order.join(" → ")}<br><br>`;
+
+  /* Nightly schedule */
+  const schedBtn=document.createElement("button");
+  schedBtn.textContent="Schedule nightly 02:00 extract";
+  schedBtn.onclick=async()=>{
+    const r=await fetch(API+"/schedule_daily_2am",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({config_id:id})});
+    alert(r.ok?"Nightly job scheduled!":await r.text());
+  };
+  box.appendChild(schedBtn);
+
+  /* Manual extract */
+  const runBtn=document.createElement("button");
+  runBtn.textContent="Run Extract Now";
+  runBtn.style.marginLeft="0.5rem";
+  runBtn.onclick=async()=>{
+    const r=await fetch(API+"/extract_now",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({config_id:id})});
+    alert(r.ok?"Extract started!":await r.text());
+  };
+  box.appendChild(runBtn);
+}
+</script>
+</body>
+</html>
