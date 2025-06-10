@@ -47,12 +47,23 @@ app.add_middleware(
 # 1.  Schema discovery
 # ──────────────────────────────────────────────────────────────────────────
 @app.get("/schema")
-def get_schema() -> Dict[str, List[str]]:
+def get_schema(): #-> Dict[str, List[str]]
     """Return {table: [column, …]} for front-end picker."""
-    return {
-        t: [c["name"] for c in inspector.get_columns(t)]
-        for t in inspector.get_table_names()
-    }
+    tables = inspector.get_table_names(schema = 'company')
+    table_dict = {}
+    for table in tables:
+        
+        columns = inspector.get_columns(table , schema = 'company')
+        table_columns = [col['name'] for col in columns]
+        table_dict[table] = table_columns
+    return table_dict
+
+    # shorten version
+    # return {
+    #     t: [c["name"] for c in inspector.get_columns(t)]
+    #     for t in inspector.get_table_names()
+     
+    # }
 
 # ──────────────────────────────────────────────────────────────────────────
 # 2.  Configure  (save selections + plan)
@@ -83,9 +94,9 @@ def configure(body: FieldSelection):
     except (ValueError, SQLAlchemyError) as exc:
         raise HTTPException(500, f"Configure failed: {exc}")
 
-# ──────────────────────────────────────────────────────────────────────────
-# 3.  Schedule nightly extract at 02:00 (Asia/Bangkok)
-# ──────────────────────────────────────────────────────────────────────────
+# # ──────────────────────────────────────────────────────────────────────────
+# # 3.  Schedule nightly extract at 02:00 (Asia/Bangkok)
+# # ──────────────────────────────────────────────────────────────────────────
 class IDBody(BaseModel):
     config_id: int
 
